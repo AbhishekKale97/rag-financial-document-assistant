@@ -6,6 +6,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_google_genai import ChatGoogleGenerativeAI
 from google import genai
 
+st.set_page_config(page_title="PDF Q&A Bot", page_icon="📄", layout="centered")
 # Works both locally and on Streamlit Cloud
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
@@ -14,9 +15,6 @@ except:
     load_dotenv()
     api_key = os.getenv("GEMINI_API_KEY")
 
-client = genai.Client(api_key=api_key)
-load_dotenv()
-api_key = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key)
 
 def load_pdf(file):
@@ -74,8 +72,6 @@ Answer:"""
             return {"status": "quota", "answer": None}
         return {"status": "error", "answer": err}
 
-# ── PAGE CONFIG ──
-st.set_page_config(page_title="PDF Q&A Bot", page_icon="📄", layout="centered")
 
 # ── CUSTOM CSS ──
 st.markdown("""
