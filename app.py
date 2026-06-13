@@ -1,76 +1,25 @@
 import os
+
 import streamlit as st
-from pypdf import PdfReader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import FAISS
-from langchain_google_genai import ChatGoogleGenerativeAI
-from google import genai
+
+from rag_utils import answer_question, create_vectorstore
 
 st.set_page_config(page_title="PDF Q&A Bot", page_icon="📄", layout="centered")
-# Works both locally and on Streamlit Cloud
-try:
-    api_key = st.secrets["GEMINI_API_KEY"]
-except:
-    from dotenv import load_dotenv
-    load_dotenv()
-    api_key = os.getenv("GEMINI_API_KEY")
 
-client = genai.Client(api_key=api_key)
+# Load API Key: Check environment first (local), then Streamlit secrets (Cloud)
+from dotenv import load_dotenv
+load_dotenv()
+api_key = os.getenv("GEMINI_API_KEY")
 
-def load_pdf(file):
-    reader = PdfReader(file)
-    text = ""
-    for page in reader.pages:
-        text += page.extract_text()
-    return text
-
-def split_text(text):
-    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-    return splitter.split_text(text)
-
-def get_embedding(text):
-    result = client.models.embed_content(
-        model="models/gemini-embedding-001",
-        contents=text
-    )
-    return result.embeddings[0].values
-
-class GeminiEmbeddings:
-    def embed_documents(self, texts):
-        return [get_embedding(t) for t in texts]
-    def embed_query(self, text):
-        return get_embedding(text)
-    def __call__(self, text):
-        return get_embedding(text)
-
-def create_vectorstore(chunks):
-    embeddings = GeminiEmbeddings()
-    return FAISS.from_texts(chunks, embedding=embeddings)
-
-def answer_question(vectorstore, question):
+if not api_key:
     try:
-        llm = ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash",
-            google_api_key=api_key,
-            temperature=0.3
-        )
-        docs = vectorstore.similarity_search(question, k=3)
-        context = "\n\n".join([doc.page_content for doc in docs])
-        prompt = f"""Use the following context to answer the question.
+        api_key = st.secrets["GEMINI_API_KEY"]
+    except:
+        pass
 
-Context:
-{context}
-
-Question: {question}
-
-Answer:"""
-        response = llm.invoke(prompt)
-        return {"status": "ok", "answer": response.content}
-    except Exception as e:
-        err = str(e)
-        if "429" in err or "RESOURCE_EXHAUSTED" in err:
-            return {"status": "quota", "answer": None}
-        return {"status": "error", "answer": err}
+if not api_key:
+    st.error("❌ GEMINI_API_KEY not found. Please set it in your .env file or Streamlit secrets.")
+    st.stop()
 
 
 # ── CUSTOM CSS ──
@@ -132,10 +81,8 @@ uploaded_file = st.file_uploader("📂 Upload your PDF", type=["pdf"])
 if uploaded_file:
     with st.spinner("⚙️ Processing your PDF..."):
         try:
-            text = load_pdf(uploaded_file)
-            chunks = split_text(text)
-            vectorstore = create_vectorstore(chunks)
-            st.markdown(f'<div class="success-box">✅ PDF processed successfully — <strong>{len(chunks)} chunks</strong> created and indexed.</div>', unsafe_allow_html=True)
+            vectorstore, chunk_count = create_vectorstore(uploaded_file, api_key)
+            st.markdown(f'<div class="success-box">✅ PDF processed successfully — <strong>{chunk_count} chunks</strong> created and indexed.</div>', unsafe_allow_html=True)
             st.session_state["vectorstore"] = vectorstore
         except Exception as e:
             st.error(f"Failed to process PDF: {str(e)}")
@@ -144,15 +91,17 @@ if uploaded_file:
 
     # ── QUESTION INPUT ──
     st.markdown("### 💬 Ask a Question")
-    question = st.text_input("", placeholder="e.g. What is the total revenue for FY2024?")
+    question = st.text_input("Ask a question", placeholder="e.g. What is the total revenue for FY2024?", label_visibility="collapsed")
 
     if question:
         with st.spinner("🤖 Thinking..."):
-            result = answer_question(st.session_state["vectorstore"], question)
+            result = answer_question(st.session_state["vectorstore"], question, api_key)
 
         if result["status"] == "ok":
             st.markdown("**🧠 Answer:**")
             st.markdown(f'<div class="answer-box">{result["answer"]}</div>', unsafe_allow_html=True)
+            if result.get("sources"):
+                st.caption("Sources: " + ", ".join(result["sources"]))
 
         elif result["status"] == "quota":
             st.markdown(f"""
