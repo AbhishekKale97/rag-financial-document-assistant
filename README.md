@@ -32,7 +32,7 @@ User Question → Embed Query → Similarity Search → Top 3 Chunks
 | Layer | Technology |
 |---|---|
 | UI | Streamlit |
-| LLM | Google Gemini 2.0 Flash |
+| LLM | Google Gemini 2.5 Flash |
 | Embeddings | Google Gemini Embedding 001 |
 | Vector Store | FAISS |
 | PDF Parsing | PyPDF |
