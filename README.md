@@ -11,19 +11,19 @@ An AI-powered chatbot that lets you upload any financial PDF document and ask qu
 
 ## 🧠 How It Works
 ```
-PDF Upload → Text Extraction → Chunking → Embedding → FAISS Vector Store
+PDF Upload → Text Extraction (Page-Aware) → Batch Embedding → FAISS Vector Store
                                                               ↓
-User Question → Embed Query → Similarity Search → Top 3 Chunks
+User Question → Embed Query → MMR Similarity Search → Top 4 Chunks
                                                               ↓
-                                              Gemini 2.0 Flash → Answer
+                                              Gemini 2.0 Flash → Answer with Sources
 ```
 
-1. **PDF Ingestion** — Extracts raw text from uploaded PDF using PyPDF
-2. **Chunking** — Splits text into overlapping chunks using LangChain's RecursiveCharacterTextSplitter
-3. **Embedding** — Converts chunks into vector embeddings using Google's `gemini-embedding-001` model
-4. **Vector Store** — Stores embeddings locally using FAISS for fast similarity search
-5. **Retrieval** — On each question, finds the 3 most relevant chunks via cosine similarity
-6. **Generation** — Passes retrieved context + question to Gemini 2.0 Flash to generate the answer
+1. **PDF Ingestion** — Extracts raw text from uploaded PDF using PyPDF with page-number tracking.
+2. **Chunking** — Splits text into optimized 800-character chunks with overlap for better context.
+3. **Batch Embedding** — Converts chunks into vector embeddings in batches using Google's `gemini-embedding-001` (up to 100x faster than single calls).
+4. **Vector Store** — Stores embeddings locally using FAISS.
+5. **Retrieval** — Uses **Maximal Marginal Relevance (MMR)** to find the 4 most relevant and diverse context blocks.
+6. **Generation** — Passes filtered context + question to Gemini 2.0 Flash with a strict factual grounding prompt.
 
 ---
 
@@ -32,7 +32,7 @@ User Question → Embed Query → Similarity Search → Top 3 Chunks
 | Layer | Technology |
 |---|---|
 | UI | Streamlit |
-| LLM | Google Gemini 2.0 Flash |
+| LLM | Google Gemini 2.5 Flash |
 | Embeddings | Google Gemini Embedding 001 |
 | Vector Store | FAISS |
 | PDF Parsing | PyPDF |
@@ -75,6 +75,8 @@ streamlit run app.py
 pdf-qa-bot/
 ├── app.py              # Streamlit UI + main application
 ├── main.py             # CLI version of the app
+├── rag_utils.py        # Optimized RAG pipeline (retrieval, embedding, generation)
+├── check_models.py     # Utility to verify Gemini model access
 ├── .env                # API keys (not committed)
 ├── .gitignore          # Ignores .env and PDFs
 ├── requirements.txt    # Python dependencies
@@ -120,10 +122,11 @@ numpy<2
 
 ## 🔮 Future Improvements
 
-- [ ] Deploy to Streamlit Cloud
+- [x] Optimize embedding performance with batching
+- [x] Add source/page number tracking
+- [x] Implement MMR (Maximal Marginal Relevance) for diversity
 - [ ] Support multiple PDFs simultaneously
 - [ ] Persist vector store to disk
-- [ ] Add chat history export
 - [ ] Support for scanned PDFs via OCR
 
 ---
